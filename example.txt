@@ -1,0 +1,267 @@
+lientSideCalendarGetItemsFun(void* args)
+{
+	pthread_mutex_lock(&mutex);
+	LOGI("JNI::ClientSideCalendarGetItemsFun");
+	struct arg_struct *pArgs = (struct arg_struct *)args;
+	LOGI("JNI::ClientSideCalendarGetItemsFun CalendarItem start = %s end = %s ", pArgs->start.c_str(),pArgs->end.c_str());
+	std::vector<CalendarItem> CalendarItem = cal.getCalendarItems(pArgs->start, pArgs->end);		
+	delete (struct arg_struct *)args;
+	jsonxx::Array array;
+	
+	
+	for(int i=0;i<CalendarItem.size();i++)
+	{
+	  jsonxx::Object o;
+	  jsonxx::Array requiredAttendees;
+	  jsonxx::Array optionalAttendees;
+	  jsonxx::Array resources;
+	  
+	  o << "iCalUid" << CalendarItem[i].id;
+	  o << "end" << CalendarItem[i].endTime;
+	  o << "start" << CalendarItem[i].startTime;
+	  o << "location" << CalendarItem[i].location;
+	  //o << "message" << CalendarItem[i].message;
+	  o << "message" << "";
+	  o << "subject" << CalendarItem[i].subject;
+	  o << "organizer" << CalendarItem[i].organizer;
+	  o << "messageType" << "calendarItem";
+	  o << "message" << CalendarItem[i].message;
+	  LOGI("JNI::CalendarItem O json = %s",o.json().c_str());
+	  //====requiredAttendees====
+	  LOGI("JNI::Client side calendar required attendess size = %d",CalendarItem[i].vRequiredAttendees.size());
+	  
+
+  	for(int j = 0 ; j < CalendarItem[i].vRequiredAttendees.size(); j++)
+	  {
+	  	LOGI("JNI::Client side calendar required name = %s", CalendarItem[i].vRequiredAttendees[j].name.c_str());
+	  	jsonxx::Object oRequiredAttendees;
+	  	oRequiredAttendees << "email" << CalendarItem[i].vRequiredAttendees[j].email;
+	  	oRequiredAttendees << "name" << CalendarItem[i].vRequiredAttendees[j].name;
+	  	oRequiredAttendees << "response" << CalendarItem[i].vRequiredAttendees[j].responseStatus;
+	  	requiredAttendees << oRequiredAttendees;
+	  }
+
+	  
+	  o << "requiredAttendees" << requiredAttendees;
+	  //====optionalAttendees====
+	  LOGI("JNI::1");
+	  LOGI("JNI::Client side calendar option attendess size = %d",CalendarItem[i].vOptionalAttendees.size());
+	 
+  	for(int h = 0 ; h < CalendarItem[i].vOptionalAttendees.size(); h++)
+	  {
+	  	LOGI("Client side calendar Optional name = %s", CalendarItem[i].vOptionalAttendees[h].name.c_str());
+	  	jsonxx::Object oOptionalAttendees;
+	  	oOptionalAttendees << "email" << CalendarItem[i].vOptionalAttendees[h].email;
+	  	oOptionalAttendees << "name" << CalendarItem[i].vOptionalAttendees[h].name;
+	  	oOptionalAttendees << "response" << CalendarItem[i].vOptionalAttendees[h].responseStatus;
+	  	optionalAttendees << oOptionalAttendees;
+	  }
+	 
+	  
+	  o << "optionalAttendees" << optionalAttendees;
+	  //====resources====
+	  LOGI("JNI::2");
+	  for(int g = 0 ; g < CalendarItem[i].vResources.size(); g++)
+	  {
+	  	jsonxx::Object oResources;
+	  	oResources << "email" << CalendarItem[i].vRequiredAttendees[g].email;
+	  	oResources << "name" << CalendarItem[i].vRequiredAttendees[g].name;
+	  	oResources << "response" << CalendarItem[i].vRequiredAttendees[g].responseStatus;
+	  	resources << oResources;
+	  }
+	  o << "resources" << resources;
+	  array << o; 
+	}	
+	LOGI("JNI::CalendarItem JSON = %s",array.json().c_str());
+		
+	
+	JNIEnv* _env = findThreadJniEnv();
+	bool bNullPtr = false;
+	if (_env == NULL)
+	{
+		LOGE("JNI::CalendarOnCalendar env = NULL");
+			
+		gs_jvm->AttachCurrentThread(&_env, NULL);
+		//attachThreadAndSave();
+		bNullPtr = true;
+	}	
+	jstring jstr_json = _env->NewStringUTF(array.json().c_str());
+	jstring jstr_userdata = _env->NewStringUTF("");
+		
+	jclass java_class = _env->GetObjectClass(g_Object);
+	jmethodID id_callback = _env->GetMethodID(java_class, "CalendarOnCalendar", "(Ljava/lang/String;ZLjava/lang/String;)V");
+	if (id_callback == 0)
+		LOGD("JNI::Failed to identify CalendarOnCalendar id_callback = %x, java_class = %x",(int)id_callback,(int)java_class);
+	else
+	{
+		//start to call java
+		LOGD("JNI::Call CalendarOnCalendar id_callback = %x",(int)id_callback);
+		_env->CallVoidMethod(g_Object,id_callback,jstr_json,1,jstr_userdata);
+	}
+	
+	_env->DeleteLocalRef(java_class);
+	if (bNullPtr == true)
+		gs_jvm->DetachCurrentThread();	
+		
+		
+	pthread_mutex_unlock(&mutex);
+	
+}
+
+
+
+
+void *GetPhotoByEmail(void* args)
+{
+	pthread_mutex_lock(&mutex);
+	jsonxx::Object o;
+	LOGI("JNI::GetPhotoByEmail 1");
+	struct arg_email *pArgs = (struct arg_email *)args;
+	
+	
+	LOGI("JNI::GetPhotoByEmail 2");
+	
+	string photo = cal.getContactPhoto(pArgs->email);
+	LOGI("JNI::GetPhotoByEmail 3");
+	o << "emailAddress" << pArgs->email;
+	o << "photo" << photo;
+	LOGI("JNI::GetPhotoByEmail 4");
+	delete (struct arg_email *)args;
+	LOGI("JNI::GetPhotoByEmail 5");
+	JNIEnv* _env = findThreadJniEnv();
+	bool bNullPtr = false;
+	if (_env == NULL)
+	{
+		LOGE("JNI::CalendarOnContacts env = NULL");
+			
+		gs_jvm->AttachCurrentThread(&_env, NULL);
+		//attachThreadAndSave();
+		bNullPtr = true;
+	}	
+	jstring jstr_contactItemsJSON = _env->NewStringUTF(o.json().c_str());
+	jstring jstr_userdata = _env->NewStringUTF("");
+		
+		
+	jclass java_class = _env->GetObjectClass(g_Object);
+	jmethodID id_callback = _env->GetMethodID(java_class, "CalendarOnContacts", "(Ljava/lang/String;Ljava/lang/String;)V");
+	if (id_callback == 0)
+		LOGD("JNI::Failed to identify CalendarOnError id_callback = %x, java_class = %x",(int)id_callback,(int)java_class);
+	else
+	{
+		//start to call java
+		LOGD("JNI::Call CalendarOnError id_callback = %x",(int)id_callback);
+		_env->CallVoidMethod(g_Object,id_callback,jstr_contactItemsJSON,jstr_userdata);
+	}
+	
+	_env->DeleteLocalRef(java_class);
+	if (bNullPtr == true)
+		gs_jvm->DetachCurrentThread();
+	
+	pthread_mutex_unlock(&mutex);
+	
+}
+
+
+JNIEXPORT bool JNICALL Java_com_awindinc_oneroom_edpclient_EDPClientCloud_clientSideCalendarConnectByEmail(JNIEnv* env, jobject thiz,
+jstring _email, jstring _domain, jstring _username, jstring _password)
+{
+	
+	char* email = (char*)(env->GetStringUTFChars(_email, 0));
+	char* domain = (char*)(env->GetStringUTFChars(_domain, 0));
+	char* username = (char*)(env->GetStringUTFChars(_username, 0));
+	char* password = (char*)(env->GetStringUTFChars(_password, 0));
+		
+	std::string my_email(email);
+	std::string my_domain(domain);
+	std::string my_username(username);
+	std::string my_password(password);
+	
+	
+	
+	bool ret = cal.connectByEmail(my_email, my_domain, my_username, my_password);
+	
+	LOGI("JNI::EDPClientCloud::connectByEmail email = %s, domain = %s, username = %s, password = %s, ret = %d ",my_email.c_str(),my_domain.c_str(),my_username.c_str(),my_password.c_str(),ret);
+	env->ReleaseStringUTFChars(_email,email);
+  env->ReleaseStringUTFChars(_domain,domain);
+	env->ReleaseStringUTFChars(_username,username);
+	env->ReleaseStringUTFChars(_password,password);
+	
+	return ret;	
+}
+
+
+JNIEXPORT bool JNICALL Java_com_awindinc_oneroom_edpclient_EDPClientCloud_clientSideCalendarConnectByServiceURL(JNIEnv* env, jobject thiz,
+jstring _serviceURL, jstring _domain, jstring _username, jstring _password)
+{
+	
+	char* serviceURL = (char*)(env->GetStringUTFChars(_serviceURL, 0));
+	char* domain = (char*)(env->GetStringUTFChars(_domain, 0));
+	char* username = (char*)(env->GetStringUTFChars(_username, 0));
+	char* password = (char*)(env->GetStringUTFChars(_password, 0));
+		
+	std::string my_serviceURL(serviceURL);
+	std::string my_domain(domain);
+	std::string my_username(username);
+	std::string my_password(password);
+	
+	bool ret = cal.connectByServiceURL(my_serviceURL, my_domain, my_username, my_password);	
+	LOGI("JNI::EDPClientCloud::connectByServiceURL serviceURL = %s, domain = %s, username = %s, password = %s, ret = %d ",my_serviceURL.c_str(),my_domain.c_str(),my_username.c_str(),my_password.c_str(),ret);	
+	env->ReleaseStringUTFChars(_serviceURL,serviceURL);
+  env->ReleaseStringUTFChars(_domain,domain);
+	env->ReleaseStringUTFChars(_username,username);
+	env->ReleaseStringUTFChars(_password,password);
+	
+	return ret;	
+}
+
+
+JNIEXPORT void JNICALL Java_com_awindinc_oneroom_edpclient_EDPClientCloud_clientSideCalendarGetContactPhoto(JNIEnv* env, jobject thiz,
+jstring _email){
+	
+	
+	char* email = (char*)(env->GetStringUTFChars(_email, 0));
+	std::string my_email(email);
+	
+	jsonxx::Object o;
+	
+	
+	
+	string photo = cal.getContactPhoto(my_email);
+	
+	o << "emailAddress" << my_email;
+	o << "photo" << photo;
+	
+	JNIEnv* _env = findThreadJniEnv();
+	bool bNullPtr = false;
+	if (_env == NULL)
+	{
+		LOGE("JNI::CalendarOnContacts env = NULL");
+			
+		gs_jvm->AttachCurrentThread(&_env, NULL);
+		//attachThreadAndSave();
+		bNullPtr = true;
+	}	
+	jstring jstr_contactItemsJSON = _env->NewStringUTF(o.json().c_str());
+	jstring jstr_userdata = _env->NewStringUTF("");
+		
+		
+	jclass java_class = _env->GetObjectClass(g_Object);
+	jmethodID id_callback = _env->GetMethodID(java_class, "CalendarOnContacts", "(Ljava/lang/String;Ljava/lang/String;)V");
+	if (id_callback == 0)
+		LOGD("JNI::Failed to identify CalendarOnError id_callback = %x, java_class = %x",(int)id_callback,(int)java_class);
+	else
+	{
+		//start to call java
+		LOGD("JNI::Call CalendarOnError id_callback = %x",(int)id_callback);
+		_env->CallVoidMethod(g_Object,id_callback,jstr_contactItemsJSON,jstr_userdata);
+	}
+	
+	_env->DeleteLocalRef(java_class);
+	//if (bNullPtr == true)
+		//gs_jvm->DetachCurrentThread();
+	
+	
+	//const char* pPhoto = photo.c_str();
+	env->ReleaseStringUTFChars(_email,email);
+	
+}
